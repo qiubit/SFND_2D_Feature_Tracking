@@ -90,6 +90,10 @@ int main(int argc, const char *argv[])
         {
             detKeypointsHarris(keypoints, imgGray, false);
         }
+        else
+        {
+            detKeypointsModern(keypoints, img, detectorType, false);
+        }
 
         //// EOF STUDENT ASSIGNMENT
 
