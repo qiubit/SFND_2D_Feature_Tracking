@@ -95,7 +95,16 @@ int main(int argc, const char *argv[])
         cv::Rect vehicleRect(535, 180, 180, 150);
         if (bFocusOnVehicle)
         {
-            // ...
+            vector<cv::KeyPoint> filteredKeypoints;
+            for (cv::KeyPoint &k : keypoints) {
+                if (k.pt.x >= vehicleRect.x
+                    && k.pt.x <= vehicleRect.x + vehicleRect.width
+                    && k.pt.y >= vehicleRect.y
+                    && k.pt.y <= vehicleRect.y + vehicleRect.height) {
+                        filteredKeypoints.push_back(k);
+                    }
+            }
+            keypoints = filteredKeypoints;
         }
 
         //// EOF STUDENT ASSIGNMENT
