@@ -20,16 +20,21 @@
 using namespace std;
 
 string det = "SHITOMASI";
+string desc = "BRISK";
 
 void changeDetectorType(string newDetectorType)
 {
     det = newDetectorType;
 }
 
+void changeDescriptorType(string newDescriptorType)
+{
+    desc = newDescriptorType;
+}
+
 void showDetectorHelp()
 {
     std::cout << std::endl;
-    std::cout << "Current Detector Type: " << det << std::endl << std::endl;
     std::cout << "Change Detector Type:" << std::endl;
     std::cout << "\t1 - SHITOMASI\n";
     std::cout << "\t2 - HARRIS\n";
@@ -37,7 +42,21 @@ void showDetectorHelp()
     std::cout << "\t4 - BRISK\n";
     std::cout << "\t5 - FAST\n";
     std::cout << "\t6 - ORB\n";
-    std::cout << "\t7 - SIFT\n";
+    std::cout << "\t7 - SIFT\n\n";
+    std::cout << "Current Detector Type: " << det << std::endl << std::endl;
+}
+
+void showDescriptorHelp()
+{
+    std::cout << std::endl;
+    std::cout << "Change Descriptor Type:" << std::endl;
+    std::cout << "\tq - BRISK\n";
+    std::cout << "\tw - BRIEF\n";
+    std::cout << "\te - ORB\n";
+    std::cout << "\tr - FREAK\n";
+    std::cout << "\tt - AKAZE\n";
+    std::cout << "\ty - SIFT\n\n";
+    std::cout << "Current Descriptor Type: " << desc << std::endl << std::endl;
 }
 
 void filterKeypoints(vector<cv::KeyPoint> &keypoints)
@@ -76,7 +95,9 @@ int main(int argc, const char *argv[])
     bool bVis = false;            // visualize results
 
     /* MAIN LOOP OVER ALL IMAGES */
+
     bool detChanged = false;
+    bool descChanged = false;
 
     for (int imgIndex = 0; imgIndex <= imgEndIndex - imgStartIndex; imgIndex++)
     {
@@ -95,13 +116,15 @@ int main(int argc, const char *argv[])
         //// STUDENT ASSIGNMENT
         //// TASK MP.1 -> replace the following code with ring buffer of size dataBufferSize
 
-        if (!detChanged) {
+        if (!detChanged && !descChanged) {
             // push image into data frame buffer
             DataFrame frame;
             frame.cameraImg = imgGray;
             dataBuffer.push_back(frame);
         }
+
         detChanged = false;
+        descChanged = false;
 
         //// EOF STUDENT ASSIGNMENT
         cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
@@ -161,7 +184,7 @@ int main(int argc, const char *argv[])
         //// EOF STUDENT ASSIGNMENT
 
         // optional : limit number of keypoints (helpful for debugging and learning)
-        bool bLimitKpts = true;
+        bool bLimitKpts = false;
         if (bLimitKpts)
         {
             int maxKeypoints = 50;
@@ -188,9 +211,9 @@ int main(int argc, const char *argv[])
         //// -> BRIEF, ORB, FREAK, AKAZE, SIFT
 
         cv::Mat descriptors, prevDescriptors;
-        string descriptorType = "BRISK"; // BRIEF, ORB, FREAK, AKAZE, SIFT
-        descKeypoints(dataBuffer.front().keypoints, dataBuffer.front().cameraImg, prevDescriptors, descriptorType);
-        descKeypoints(dataBuffer.back().keypoints, dataBuffer.back().cameraImg, descriptors, descriptorType);
+        string descriptorName = desc;
+        descKeypoints(dataBuffer.front().keypoints, dataBuffer.front().cameraImg, prevDescriptors, descriptorName);
+        descKeypoints(dataBuffer.back().keypoints, dataBuffer.back().cameraImg, descriptors, descriptorName);
         //// EOF STUDENT ASSIGNMENT
 
         // push descriptors for current frame to end of data buffer
@@ -206,8 +229,14 @@ int main(int argc, const char *argv[])
 
             vector<cv::DMatch> matches;
             string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
-            string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
-            string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
+            string descriptorType;
+            string selectorType = "SEL_KNN";       // SEL_NN, SEL_KNN
+
+            if (descriptorName.compare("SIFT") == 0) {
+                descriptorType = "DES_HOG";
+            } else {
+                descriptorType = "DES_BINARY";
+            }
 
             //// STUDENT ASSIGNMENT
             //// TASK MP.5 -> add FLANN matching in file matching2D.cpp
@@ -241,12 +270,16 @@ int main(int argc, const char *argv[])
                 cout << "Press key to continue to next image" << endl;
 
                 showDetectorHelp();
+                showDescriptorHelp();
+
                 int key = cv::waitKey(0); // wait for key to be pressed
+
                 int zeroAscii = 48;
                 int chosenDetId = key-zeroAscii;
+
                 if (chosenDetId >= 1 && chosenDetId <= 7) {
                     detChanged = true;
-                    imgIndex -= 1;
+
                     if (chosenDetId == 1) {
                         det = "SHITOMASI";
                     } else if (chosenDetId == 2) {
@@ -262,6 +295,22 @@ int main(int argc, const char *argv[])
                     } else if (chosenDetId == 7) {
                         det = "SIFT";
                     }
+                }
+
+                vector<int> qwertyAsciiCodes{113, 119, 101, 114, 116, 121};
+                vector<string> descriptors{
+                    "BRISK", "BRIEF", "ORB", "FREAK", "AKAZE", "SIFT"
+                };
+
+                for (int i = 0; i < qwertyAsciiCodes.size(); ++i) {
+                    if (key == qwertyAsciiCodes[i]) {
+                        descChanged = true;
+                        desc = descriptors[i];
+                    }
+                }
+
+                if (detChanged || descChanged) {
+                    imgIndex -= 1;
                 }
             }
             bVis = false;
