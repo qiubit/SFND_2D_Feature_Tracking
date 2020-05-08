@@ -19,10 +19,45 @@
 
 using namespace std;
 
+string det = "SHITOMASI";
+
+void changeDetectorType(string newDetectorType)
+{
+    det = newDetectorType;
+}
+
+void showDetectorHelp()
+{
+    std::cout << std::endl;
+    std::cout << "Current Detector Type: " << det << std::endl << std::endl;
+    std::cout << "Change Detector Type:" << std::endl;
+    std::cout << "\t1 - SHITOMASI\n";
+    std::cout << "\t2 - HARRIS\n";
+    std::cout << "\t3 - AKAZE\n";
+    std::cout << "\t4 - BRISK\n";
+    std::cout << "\t5 - FAST\n";
+    std::cout << "\t6 - ORB\n";
+    std::cout << "\t7 - SIFT\n";
+}
+
+void filterKeypoints(vector<cv::KeyPoint> &keypoints)
+{
+    cv::Rect vehicleRect(535, 180, 180, 150);
+    vector<cv::KeyPoint> filteredKeypoints;
+    for (cv::KeyPoint &k : keypoints) {
+        if (k.pt.x >= vehicleRect.x
+            && k.pt.x <= vehicleRect.x + vehicleRect.width
+            && k.pt.y >= vehicleRect.y
+            && k.pt.y <= vehicleRect.y + vehicleRect.height) {
+                filteredKeypoints.push_back(k);
+            }
+    }
+    keypoints = filteredKeypoints;
+}
+
 /* MAIN PROGRAM */
 int main(int argc, const char *argv[])
 {
-
     /* INIT VARIABLES AND DATA STRUCTURES */
 
     // data location
@@ -41,8 +76,9 @@ int main(int argc, const char *argv[])
     bool bVis = false;            // visualize results
 
     /* MAIN LOOP OVER ALL IMAGES */
+    bool detChanged = false;
 
-    for (size_t imgIndex = 0; imgIndex <= imgEndIndex - imgStartIndex; imgIndex++)
+    for (int imgIndex = 0; imgIndex <= imgEndIndex - imgStartIndex; imgIndex++)
     {
         /* LOAD IMAGE INTO BUFFER */
 
@@ -52,31 +88,42 @@ int main(int argc, const char *argv[])
         string imgFullFilename = imgBasePath + imgPrefix + imgNumber.str() + imgFileType;
 
         // load image from file and convert to grayscale
-        cv::Mat img, imgGray;
+        cv::Mat img, imgGray, imgGrayPrev;
         img = cv::imread(imgFullFilename);
         cv::cvtColor(img, imgGray, cv::COLOR_BGR2GRAY);
 
         //// STUDENT ASSIGNMENT
         //// TASK MP.1 -> replace the following code with ring buffer of size dataBufferSize
 
-        // push image into data frame buffer
-        DataFrame frame;
-        frame.cameraImg = imgGray;
-        dataBuffer.push_back(frame);
+        if (!detChanged) {
+            // push image into data frame buffer
+            DataFrame frame;
+            frame.cameraImg = imgGray;
+            dataBuffer.push_back(frame);
+        }
+        detChanged = false;
+
+        //// EOF STUDENT ASSIGNMENT
+        cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
 
         if (dataBuffer.size() > 2) {
             std::cout << "pop" << std::endl;
             dataBuffer.pop_front();
         }
 
-        //// EOF STUDENT ASSIGNMENT
-        cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
+        if (dataBuffer.size() < 2) {
+            continue;
+        }
+
+        imgGrayPrev = dataBuffer.front().cameraImg;
 
         /* DETECT IMAGE KEYPOINTS */
 
         // extract 2D keypoints from current image
+        vector<cv::KeyPoint> prevKeypoints;
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        string detectorType = "SHITOMASI";
+
+        string detectorType = det;
 
         //// STUDENT ASSIGNMENT
         //// TASK MP.2 -> add the following keypoint detectors in file matching2D.cpp and enable string-based selection based on detectorType
@@ -84,15 +131,18 @@ int main(int argc, const char *argv[])
 
         if (detectorType.compare("SHITOMASI") == 0)
         {
+            detKeypointsShiTomasi(prevKeypoints, imgGrayPrev, false);
             detKeypointsShiTomasi(keypoints, imgGray, false);
         }
         else if (detectorType.compare("HARRIS") == 0)
         {
+            detKeypointsHarris(prevKeypoints, imgGrayPrev, false);
             detKeypointsHarris(keypoints, imgGray, false);
         }
         else
         {
-            detKeypointsModern(keypoints, img, detectorType, false);
+            detKeypointsModern(prevKeypoints, imgGrayPrev, detectorType, false);
+            detKeypointsModern(keypoints, imgGray, detectorType, false);
         }
 
         //// EOF STUDENT ASSIGNMENT
@@ -102,38 +152,32 @@ int main(int argc, const char *argv[])
 
         // only keep keypoints on the preceding vehicle
         bool bFocusOnVehicle = true;
-        cv::Rect vehicleRect(535, 180, 180, 150);
         if (bFocusOnVehicle)
         {
-            vector<cv::KeyPoint> filteredKeypoints;
-            for (cv::KeyPoint &k : keypoints) {
-                if (k.pt.x >= vehicleRect.x
-                    && k.pt.x <= vehicleRect.x + vehicleRect.width
-                    && k.pt.y >= vehicleRect.y
-                    && k.pt.y <= vehicleRect.y + vehicleRect.height) {
-                        filteredKeypoints.push_back(k);
-                    }
-            }
-            keypoints = filteredKeypoints;
+            filterKeypoints(prevKeypoints);
+            filterKeypoints(keypoints);
         }
 
         //// EOF STUDENT ASSIGNMENT
 
         // optional : limit number of keypoints (helpful for debugging and learning)
-        bool bLimitKpts = false;
+        bool bLimitKpts = true;
         if (bLimitKpts)
         {
             int maxKeypoints = 50;
 
             if (detectorType.compare("SHITOMASI") == 0)
             { // there is no response info, so keep the first 50 as they are sorted in descending quality order
+                prevKeypoints.erase(prevKeypoints.begin() + maxKeypoints, prevKeypoints.end());
                 keypoints.erase(keypoints.begin() + maxKeypoints, keypoints.end());
             }
+            cv::KeyPointsFilter::retainBest(prevKeypoints, maxKeypoints);
             cv::KeyPointsFilter::retainBest(keypoints, maxKeypoints);
             cout << " NOTE: Keypoints have been limited!" << endl;
         }
 
         // push keypoints and descriptor for current frame to end of data buffer
+        dataBuffer.front().keypoints = prevKeypoints;
         dataBuffer.back().keypoints = keypoints;
         cout << "#2 : DETECT KEYPOINTS done" << endl;
 
@@ -143,12 +187,14 @@ int main(int argc, const char *argv[])
         //// TASK MP.4 -> add the following descriptors in file matching2D.cpp and enable string-based selection based on descriptorType
         //// -> BRIEF, ORB, FREAK, AKAZE, SIFT
 
-        cv::Mat descriptors;
+        cv::Mat descriptors, prevDescriptors;
         string descriptorType = "BRISK"; // BRIEF, ORB, FREAK, AKAZE, SIFT
+        descKeypoints(dataBuffer.front().keypoints, dataBuffer.front().cameraImg, prevDescriptors, descriptorType);
         descKeypoints(dataBuffer.back().keypoints, dataBuffer.back().cameraImg, descriptors, descriptorType);
         //// EOF STUDENT ASSIGNMENT
 
         // push descriptors for current frame to end of data buffer
+        dataBuffer.front().descriptors = prevDescriptors;
         dataBuffer.back().descriptors = descriptors;
 
         cout << "#3 : EXTRACT DESCRIPTORS done" << endl;
@@ -193,7 +239,30 @@ int main(int argc, const char *argv[])
                 cv::namedWindow(windowName, 7);
                 cv::imshow(windowName, matchImg);
                 cout << "Press key to continue to next image" << endl;
-                cv::waitKey(0); // wait for key to be pressed
+
+                showDetectorHelp();
+                int key = cv::waitKey(0); // wait for key to be pressed
+                int zeroAscii = 48;
+                int chosenDetId = key-zeroAscii;
+                if (chosenDetId >= 1 && chosenDetId <= 7) {
+                    detChanged = true;
+                    imgIndex -= 1;
+                    if (chosenDetId == 1) {
+                        det = "SHITOMASI";
+                    } else if (chosenDetId == 2) {
+                        det = "HARRIS";
+                    } else if (chosenDetId == 3) {
+                        det = "AKAZE";
+                    } else if (chosenDetId == 4) {
+                        det = "BRISK";
+                    } else if (chosenDetId == 5) {
+                        det = "FAST";
+                    } else if (chosenDetId == 6) {
+                        det = "ORB";
+                    } else if (chosenDetId == 7) {
+                        det = "SIFT";
+                    }
+                }
             }
             bVis = false;
         }
